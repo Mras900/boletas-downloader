@@ -31,7 +31,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 # ──────────────────────────────────────────────────────
 # CONFIG
 # ──────────────────────────────────────────────────────
-APP_TITLE = "Descargador de Boletas PDF"
+APP_TITLE = "Portal de Extracción Inteligente"
 DEFAULT_WORKERS = 2
 DEFAULT_T_CARGA = 15
 DEFAULT_T_DESC = 30
@@ -527,7 +527,10 @@ def con_reintentos(driver, tarea, carpeta_temp, tc, td, reintentos, dp):
                 pass
 
             if i <= reintentos:
-                time.sleep(2 ** i)
+                import random
+                # Backoff exponencial con Jitter para evitar "estampida" de workers
+                espera = (2 ** i) + random.uniform(0.5, 1.5)
+                time.sleep(espera)
                 driver = crear_driver(carpeta_temp, dp)
 
     return Resultado(tarea=tarea, ok=False, mensaje=msg), driver
@@ -737,7 +740,9 @@ def ejecutar(tareas, workers_n, tc, td, reintentos, base_temp, log_sidebar, slot
         })
 
         if tabla is not None:
-            tabla.dataframe(pd.DataFrame(log_rows[::-1]), use_container_width=True, height=260)
+            # Mostramos solo los últimos 100 registros para evitar que el navegador del usuario colapse
+            df_mostrar = pd.DataFrame(log_rows[-100:][::-1])
+            tabla.dataframe(df_mostrar, use_container_width=True, height=260)
 
     for h in hilos:
         h.join(timeout=10)
@@ -748,43 +753,56 @@ CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 html, body, .stApp {font-family:'Inter',sans-serif!important;background:#080d18!important;color:#e2e8f0!important;}
-.block-container {max-width:820px!important;margin:0 auto!important;padding:1.5rem 1rem 1.8rem!important;width:100%!important;}
+.block-container {max-width:820px!important;margin:0 auto!important;padding:1.5rem 1rem 1.8rem!important;}
 .main-shell {width:100%;max-width:820px;margin:0 auto;}
-[data-testid="stSidebar"] {background:#0d1424!important;border-right:1px solid rgba(255,255,255,.06)!important;min-width:240px!important;max-width:240px!important;}
+
+/* Sidebar - solo forzamos el ancho en computadoras (para no romper la vista del celular) */
+[data-testid="stSidebar"] {background:#0d1424!important;border-right:1px solid rgba(255,255,255,.06)!important;}
+@media (min-width: 769px) { [data-testid="stSidebar"] {min-width:260px!important;max-width:260px!important;} }
+
 [data-testid="stSidebar"] > div {padding:1rem .85rem!important;}
 [data-testid="stSidebar"] label,[data-testid="stSidebar"] p,[data-testid="stSidebar"] span:not(.stSelectbox span),[data-testid="stSidebar"] small {color:#94a3b8!important;font-size:.80rem!important;}
-[data-testid="stSidebar"] h2 {font-size:1.05rem!important;font-weight:700!important;letter-spacing:0!important;color:#f8fafc!important;margin:0 0 .35rem!important;}
-[data-testid="stSidebar"] h4 {font-size:.64rem!important;font-weight:700!important;text-transform:uppercase;letter-spacing:.05em!important;color:#475569!important;margin:.75rem 0 .35rem!important;}
+[data-testid="stSidebar"] h2 {font-size:1.05rem!important;font-weight:700!important;color:#f8fafc!important;margin:0 0 .35rem!important;}
+[data-testid="stSidebar"] h4 {font-size:.64rem!important;font-weight:700!important;text-transform:uppercase;color:#475569!important;margin:.75rem 0 .35rem!important;}
 [data-testid="stSidebar"] hr {border-color:rgba(255,255,255,.07)!important;margin:.65rem 0!important;}
 [data-testid="stSidebar"] input[type="text"],[data-testid="stSidebar"] textarea {background:#111827!important;border:1px solid #1f2a44!important;color:#e2e8f0!important;border-radius:10px!important;font-size:.82rem!important;}
 [data-testid="stSidebar"] [data-testid="stFileUploader"] > div > div {background:#111827!important;border:1px dashed #263657!important;border-radius:10px!important;padding:.7rem!important;}
-[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div {background:#111827!important;border:1px solid #1f2a44!important;border-radius:10px!important;min-height:38px!important;}
+[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div {background:#111827!important;border:1px solid #1f2a44!important;border-radius:10px!important;}
 [data-testid="stSidebar"] [data-testid="stSelectbox"] span {font-size:.82rem!important;color:#e2e8f0!important;}
+
 .file-badge {display:flex;align-items:center;gap:7px;background:#0f213d;border:1px solid #214b90;border-radius:8px;padding:8px 10px;margin-top:6px;font-size:.75rem;color:#93c5fd;font-weight:500;}
 .file-dot {width:7px;height:7px;background:#22c55e;border-radius:50%;flex-shrink:0;}
 .hero {background:#0d1f38;border:1px solid #1a2f50;border-radius:14px;padding:14px 16px;margin-bottom:10px;}
-.hero-tag {display:inline-block;background:rgba(37,99,235,.15);color:#60a5fa;border:1px solid rgba(37,99,235,.25);border-radius:20px;padding:3px 9px;font-size:.62rem;font-weight:700;letter-spacing:.05em!important;text-transform:uppercase;margin-bottom:8px;}
-.hero-title {font-size:1.3rem!important;font-weight:700!important;letter-spacing:0!important;color:#f8fafc;line-height:1.2;margin:0 0 6px;}
+.hero-tag {display:inline-block;background:rgba(37,99,235,.15);color:#60a5fa;border:1px solid rgba(37,99,235,.25);border-radius:20px;padding:3px 9px;font-size:.62rem;font-weight:700;text-transform:uppercase;margin-bottom:8px;}
+.hero-title {font-size:1.3rem!important;font-weight:700!important;color:#f8fafc;line-height:1.2;margin:0 0 6px;}
 .hero-sub {color:#94a3b8;font-size:.80rem;line-height:1.5;margin:0;}
 .kpi-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:8px auto;}
 .kpi {background:#0d1424;border:1px solid #1a2540;border-radius:12px;padding:10px 12px;min-height:70px;display:flex;flex-direction:column;justify-content:space-between;}
-.kpi-lbl {font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em!important;color:#64748b;}
-.kpi-val {font-size:1.4rem;font-weight:700;letter-spacing:0!important;color:#f8fafc;line-height:1.05;}
-.kpi-den {font-size:.85rem;font-weight:500;color:#64748b;}.kpi-ok{color:#4ade80!important;}.kpi-err{color:#f87171!important;}
+.kpi-lbl {font-size:.65rem;font-weight:600;text-transform:uppercase;color:#64748b;}
+.kpi-val {font-size:1.4rem;font-weight:700;color:#f8fafc;line-height:1.05;}
+.kpi-den {font-size:.85rem;font-weight:500;color:#64748b;} .kpi-ok{color:#4ade80!important;} .kpi-err{color:#f87171!important;}
 .bat-wrap {background:#0d1424;border:1px solid #1a2540;border-radius:10px;padding:8px 12px;margin:6px auto;}
-.bat-header {display:flex;justify-content:space-between;font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em!important;color:#64748b;margin-bottom:6px;}
-.bat-track {height:6px;background:#080d18;border-radius:999px;overflow:hidden;}.bat-fill{height:100%;border-radius:999px;transition:width .35s ease;}
-.msg-bubble {background:#0d1424;border:1px solid #1a2540;border-radius:10px;padding:8px 12px;font-size:.80rem;text-align:center;color:#cbd5e1;margin:6px auto;transition:opacity .45s ease, transform .45s ease;}
-.msg-fade {animation:fadeMessage .45s ease;}
-@keyframes fadeMessage {0%{opacity:0;transform:translateY(4px);}100%{opacity:1;transform:translateY(0);}}
+.bat-header {display:flex;justify-content:space-between;font-size:.65rem;font-weight:600;text-transform:uppercase;color:#64748b;margin-bottom:6px;}
+.bat-track {height:6px;background:#080d18;border-radius:999px;overflow:hidden;} .bat-fill{height:100%;border-radius:999px;transition:width .35s ease;}
+.msg-bubble {background:#0d1424;border:1px solid #1a2540;border-radius:10px;padding:8px 12px;font-size:.80rem;text-align:center;color:#cbd5e1;margin:6px auto;}
 .status-pill {text-align:center;background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.15);border-radius:10px;padding:7px 10px;font-size:.78rem;color:#93c5fd;margin:4px auto 6px auto;}
-.status-pill code {background:rgba(255,255,255,.07);border-radius:4px;padding:1px 5px;font-size:.73rem;color:#f8fafc;}
-div[data-testid="stButton"] {display:flex!important;justify-content:center!important;}
-div[data-testid="stButton"] > button[kind="primary"] {max-width:260px!important;width:100%!important;height:44px!important;border-radius:10px!important;background:#2563eb!important;color:#ffffff!important;font-size:.90rem!important;font-weight:700!important;letter-spacing:0!important;border:none!important;}
-.stDownloadButton > button {width:100%!important;border-radius:10px!important;background:#14532d!important;color:#86efac!important;border:1px solid #166534!important;font-weight:700!important;height:42px!important;}
+
+div[data-testid="stButton"] {display:flex!important;justify-content:center!important; margin-top:15px;}
+div[data-testid="stButton"] > button[kind="primary"] {max-width:100%!important;width:100%!important;height:48px!important;border-radius:10px!important;background:#2563eb!important;color:#ffffff!important;font-size:1rem!important;font-weight:700!important;border:none!important;}
+
 #MainMenu, footer, header {visibility:hidden!important;}
-@media (max-width:950px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-@media (max-width:700px){.block-container{max-width:100%!important;padding:1rem .8rem 1.4rem!important;}[data-testid="stSidebar"]{min-width:100%!important;max-width:100%!important;}.main-shell{max-width:100%!important;}.kpi-grid{grid-template-columns:1fr;}.hero-title{font-size:1.15rem!important;}.kpi-val{font-size:1.25rem!important;}}
+
+/* --- Ajustes Responsive (Tablets y Móviles) --- */
+@media (max-width:950px){
+    .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media (max-width:700px){
+    .block-container{padding:1rem .5rem 1.4rem!important;}
+    .kpi-grid{grid-template-columns:1fr;}
+    .hero-title{font-size:1.15rem!important;}
+    .kpi-val{font-size:1.25rem!important;}
+    div[data-testid="stButton"] > button[kind="primary"] {font-size:1.1rem!important;height:55px!important;} /* Botones más gorditos para presionar con el dedo */
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -870,14 +888,14 @@ with st.sidebar:
         )
 
     st.markdown("---")
-    st.markdown("#### Parámetros de descarga")
-    workers_n = st.slider("Workers paralelos", 1, 4, DEFAULT_WORKERS)
-    t_carga = st.slider("Timeout carga (s)", 5, 60, DEFAULT_T_CARGA)
-    t_descarga = st.slider("Timeout descarga (s)", 10, 120, DEFAULT_T_DESC)
-    reintentos = st.slider("Reintentos máximos", 0, 5, DEFAULT_REINTEN)
-    st.markdown("---")
-    log_sidebar = st.checkbox("Actividad en tiempo real", value=True)
-    st.caption("En servidor no se usa carpeta local del usuario. Los archivos se generan temporalmente y se entregan en un ZIP.")
+    with st.expander("⚙️ Opciones de descarga"):
+        workers_n = st.slider("Workers paralelos", 1, 4, DEFAULT_WORKERS)
+        t_carga = st.slider("Timeout carga (s)", 5, 60, DEFAULT_T_CARGA)
+        t_descarga = st.slider("Timeout descarga (s)", 10, 120, DEFAULT_T_DESC)
+        reintentos = st.slider("Reintentos máximos", 0, 5, DEFAULT_REINTEN)
+        st.markdown("---")
+        log_sidebar = st.checkbox("Actividad en tiempo real (Log)", value=True)
+        st.caption("Los archivos se procesan temporalmente y se entregan en un ZIP.")
 
 
 # ──────────────────────────────────────────────────────
@@ -886,8 +904,8 @@ with st.sidebar:
 st.markdown("<div class='main-shell'>", unsafe_allow_html=True)
 st.markdown(
     "<div class='hero'>"
-    "<div class='hero-tag'>Render · Docker · Selenium</div>"
-    "<p class='hero-title'>Descargador masivo de boletas PDF</p>"
+    "<div class='hero-tag'>⚡ Extracción Simultánea · Motor Acelerado</div>"
+    "<p class='hero-title'>Portal de Extracción Inteligente</p>"
     "<p class='hero-sub'>Sube un archivo o pega una URL. La app procesa en el servidor y te entrega un ZIP al finalizar.</p>"
     "</div>",
     unsafe_allow_html=True,
@@ -925,6 +943,8 @@ else:
         msg_slot.markdown(f"<div class='msg-bubble msg-fade'>{mensaje_idle}</div>", unsafe_allow_html=True)
 
 iniciar = st.button("🚀  Iniciar descarga", type="primary", disabled=not puede_iniciar)
+
+st.markdown("<img src='https://media1.tenor.com/m/cjiMTiZLhxgAAAAC/midgets-dancing.gif' style='display:block; margin: 30px auto; max-width: 250px; border-radius: 12px;'>", unsafe_allow_html=True)
 
 if iniciar:
     st.session_state.msg_actual = ""
