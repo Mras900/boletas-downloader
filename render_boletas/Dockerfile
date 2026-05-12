@@ -50,10 +50,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+
 RUN pip install -r requirements.txt
 
-COPY app.py .
+COPY . .
 
 EXPOSE 10000
 
-CMD streamlit run app.py --server.port=${PORT:-10000} --server.address=0.0.0.0 --browser.gatherUsageStats=false
+CMD ["streamlit", "run", "app.py", "--server.port=10000", "--server.address=0.0.0.0", "--browser.gatherUsageStats=false"]
