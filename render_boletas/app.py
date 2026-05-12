@@ -345,6 +345,8 @@ def crear_driver(carpeta: Path, driver_path: Optional[str] = None) -> webdriver.
         "--disable-dev-shm-usage",
         "--disable-popup-blocking",
         "--disable-extensions",
+        "--log-level=3",
+        "--silent",
     ]:
         opts.add_argument(a)
 
@@ -899,106 +901,158 @@ with st.sidebar:
 
 
 # ──────────────────────────────────────────────────────
-# MAIN
+# MAIN (Navegación por Pestañas)
 # ──────────────────────────────────────────────────────
-st.markdown("<div class='main-shell'>", unsafe_allow_html=True)
-st.markdown(
-    "<div class='hero'>"
-    "<div class='hero-tag'>⚡ Extracción Simultánea · Motor Acelerado</div>"
-    "<p class='hero-title'>Portal de Extracción Inteligente</p>"
-    "<p class='hero-sub'>Sube un archivo o pega una URL. La app procesa en el servidor y te entrega un ZIP al finalizar.</p>"
-    "</div>",
-    unsafe_allow_html=True,
-)
+import database
+from pathlib import Path
 
-if modo_archivo:
-    puede_iniciar = df is not None and col_url is not None and col_fecha is not None and col_folio is not None
-    hint = "← Carga tu archivo CSV / Excel en el panel lateral para continuar."
-else:
-    url_ind = st.session_state.get("url_individual", "").strip()
-    puede_iniciar = bool(url_ind)
-    hint = "← Pega la URL de la boleta en el panel lateral para continuar."
+tab_descarga, tab_buscador = st.tabs(["🚀 Extractor Masivo", "🔍 Buscador Interno (Base de Datos)"])
 
-kpi_slot = st.empty()
-prog_slot = st.empty()
-msg_slot = st.empty()
-stat_slot = st.empty()
+# ====== TAB 1: DESCARGA ======
+with tab_descarga:
+    st.markdown("<div class='main-shell'>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='hero'>"
+        "<div class='hero-tag'>⚡ Extracción Simultánea · Motor Acelerado</div>"
+        "<p class='hero-title'>Portal de Extracción Inteligente</p>"
+        "<p class='hero-sub'>Sube un archivo o pega una URL. La app procesa en el servidor y te entrega un ZIP al finalizar.</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
-_rs = st.session_state.resultados
-if _rs:
-    _ok = sum(1 for r in _rs if r.ok)
-    _err = sum(1 for r in _rs if not r.ok)
-    _tot = len(_rs)
-    _pct = round(_ok / _tot * 100, 1) if _tot else 0
-    kpi_slot.markdown(_kpi_html(_tot, _tot, _ok, _err, 0.0), unsafe_allow_html=True)
-    prog_slot.markdown(_bateria(_pct), unsafe_allow_html=True)
-    msg_slot.markdown("<div class='msg-bubble msg-fade' style='color:#4ade80;'>🎉 Proceso completado</div>", unsafe_allow_html=True)
-else:
-    kpi_slot.markdown(_kpi_html(0, 0, 0, 0, 0.0), unsafe_allow_html=True)
-    prog_slot.markdown(_bateria(0), unsafe_allow_html=True)
-    if not puede_iniciar:
-        msg_slot.markdown(f"<div class='msg-bubble msg-fade' style='color:#64748b;font-style:italic;'>{hint}</div>", unsafe_allow_html=True)
+    if modo_archivo:
+        puede_iniciar = df is not None and col_url is not None and col_fecha is not None and col_folio is not None
+        hint = "← Carga tu archivo CSV / Excel en el panel lateral para continuar."
     else:
-        mensaje_idle = obtener_mensaje_suave(0, 0, min_segundos=MSG_MIN_SEGUNDOS)
-        msg_slot.markdown(f"<div class='msg-bubble msg-fade'>{mensaje_idle}</div>", unsafe_allow_html=True)
+        url_ind = st.session_state.get("url_individual", "").strip()
+        puede_iniciar = bool(url_ind)
+        hint = "← Pega la URL de la boleta en el panel lateral para continuar."
 
-iniciar = st.button("🚀  Iniciar descarga", type="primary", disabled=not puede_iniciar)
+    kpi_slot = st.empty()
+    prog_slot = st.empty()
+    msg_slot = st.empty()
+    stat_slot = st.empty()
 
-st.markdown("<img src='https://media1.tenor.com/m/cjiMTiZLhxgAAAAC/midgets-dancing.gif' style='display:block; margin: 30px auto; max-width: 250px; border-radius: 12px;'>", unsafe_allow_html=True)
-
-if iniciar:
-    st.session_state.msg_actual = ""
-    st.session_state.msg_stage = ""
-    st.session_state.msg_last_change = 0.0
-
-    try:
-        job_dir = crear_job_dir()
-        salida = job_dir / "output"
-        salida.mkdir(parents=True, exist_ok=True)
-
-        if modo_archivo:
-            tareas, omitidos, warns = construir_tareas(df, col_url, col_fecha, col_folio, salida)
-            for w in warns[:10]:
-                st.warning(w)
-            if len(warns) > 10:
-                st.warning(f"Se omitieron {len(warns) - 10} advertencias adicionales.")
-            if omitidos:
-                st.info(f"Se omitieron {omitidos} archivos porque ya existían en esta ejecución.")
+    _rs = st.session_state.resultados
+    if _rs:
+        _ok = sum(1 for r in _rs if r.ok)
+        _err = sum(1 for r in _rs if not r.ok)
+        _tot = len(_rs)
+        _pct = round(_ok / _tot * 100, 1) if _tot else 0
+        kpi_slot.markdown(_kpi_html(_tot, _tot, _ok, _err, 0.0), unsafe_allow_html=True)
+        prog_slot.markdown(_bateria(_pct), unsafe_allow_html=True)
+        msg_slot.markdown("<div class='msg-bubble msg-fade' style='color:#4ade80;'>🎉 Proceso completado</div>", unsafe_allow_html=True)
+    else:
+        kpi_slot.markdown(_kpi_html(0, 0, 0, 0, 0.0), unsafe_allow_html=True)
+        prog_slot.markdown(_bateria(0), unsafe_allow_html=True)
+        if not puede_iniciar:
+            msg_slot.markdown(f"<div class='msg-bubble msg-fade' style='color:#64748b;font-style:italic;'>{hint}</div>", unsafe_allow_html=True)
         else:
-            tarea = tarea_desde_url(st.session_state.url_individual.strip(), salida)
-            if st.session_state.folio_manual.strip():
-                nombre = limpiar_nombre(st.session_state.folio_manual.strip())
-                tarea.folio = nombre
-                tarea.ruta_pdf = salida / f"{nombre}.pdf"
-            tareas = [tarea]
+            mensaje_idle = obtener_mensaje_suave(0, 0, min_segundos=MSG_MIN_SEGUNDOS)
+            msg_slot.markdown(f"<div class='msg-bubble msg-fade'>{mensaje_idle}</div>", unsafe_allow_html=True)
 
-        if not tareas:
-            st.warning("No hay tareas para procesar.")
+    iniciar = st.button("🚀  Iniciar descarga", type="primary", disabled=not puede_iniciar)
+
+    st.markdown("<img src='https://media1.tenor.com/m/cjiMTiZLhxgAAAAC/midgets-dancing.gif' style='display:block; margin: 30px auto; max-width: 250px; border-radius: 12px;'>", unsafe_allow_html=True)
+
+    if iniciar:
+        st.session_state.msg_actual = ""
+        st.session_state.msg_stage = ""
+        st.session_state.msg_last_change = 0.0
+
+        try:
+            job_dir = crear_job_dir()
+            salida = job_dir / "output"
+            salida.mkdir(parents=True, exist_ok=True)
+
+            if modo_archivo:
+                tareas, omitidos, warns = construir_tareas(df, col_url, col_fecha, col_folio, salida)
+                for w in warns[:10]:
+                    st.warning(w)
+                if len(warns) > 10:
+                    st.warning(f"Se omitieron {len(warns) - 10} advertencias adicionales.")
+                if omitidos:
+                    st.info(f"Se omitieron {omitidos} archivos porque ya existían en esta ejecución.")
+            else:
+                tarea = tarea_desde_url(st.session_state.url_individual.strip(), salida)
+                if st.session_state.folio_manual.strip():
+                    nombre = limpiar_nombre(st.session_state.folio_manual.strip())
+                    tarea.folio = nombre
+                    tarea.ruta_pdf = salida / f"{nombre}.pdf"
+                tareas = [tarea]
+
+            if not tareas:
+                st.warning("No hay tareas para procesar.")
+            else:
+                base_temp = job_dir / "workers"
+                base_temp.mkdir(parents=True, exist_ok=True)
+                resultados = ejecutar(tareas, workers_n, t_carga, t_descarga, reintentos, base_temp, log_sidebar, kpi_slot, prog_slot, msg_slot, stat_slot)
+                st.session_state.resultados = resultados
+
+                ok = [r for r in resultados if r.ok]
+                err = [r for r in resultados if not r.ok]
+
+                if ok:
+                    # ====== GUARDADO EN LA BASE DE DATOS Y EN LA NUBE/LOCAL ======
+                    BASE_PERMANENTE = Path("boletas_permanentes")
+                    BASE_PERMANENTE.mkdir(parents=True, exist_ok=True)
+                    
+                    for r in ok:
+                        # Copiamos desde la carpeta temporal al archivo permanente
+                        destino = BASE_PERMANENTE / f"boleta_{r.tarea.folio}.pdf"
+                        if r.tarea.ruta_pdf.exists():
+                            shutil.copy2(r.tarea.ruta_pdf, destino)
+                        
+                        # Registramos el PDF en SQLite del usuario local
+                        database.guardar_boleta(folio=r.tarea.folio, ruta_pdf=str(destino.resolve()))
+
+                    zip_bytes = hacer_zip(ok)
+                    st.success(f"Proceso finalizado. Se descargaron exitosamente y se registraron en la Base de Datos {len(ok)} boletas.")
+                    nombre_zip = construir_nombre_zip_desde_fechas(df, col_fecha) if modo_archivo else "boleta_individual.zip"
+                    st.download_button("📦 Descargar ZIP con PDFs", data=zip_bytes, file_name=nombre_zip, mime="application/zip")
+
+                if err:
+                    with st.expander(f"Ver errores ({len(err)})"):
+                        for r in err:
+                            st.error(f"{r.tarea.folio}: {r.mensaje}")
+        except WebDriverException as e:
+            st.error(f"Error de Selenium/ChromeDriver: {e}")
+        except Exception as e:
+            st.error(f"Ocurrió un error durante la ejecución: {e}")
+        finally:
+            if 'job_dir' in locals() and job_dir.exists() and not KEEP_JOB_DIR:
+                shutil.rmtree(job_dir, ignore_errors=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# ====== TAB 2: BUSCADOR ======
+with tab_buscador:
+    st.markdown("<div class='hero'><h2 class='hero-title'>Base de Datos de Boletas</h2><p class='hero-sub'>Busca documentos que tu servidor haya procesado en el pasado.</p></div>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        query_folio = st.text_input("🔍 Buscar por Folio (Nro)", placeholder="Ej. 659800")
+    with col2:
+        query_fecha = st.date_input("🗓️ Filtrar por Fecha exacta (Opcional)", value=None)
+        
+    if st.button("Buscar en mi Servidor", type="primary"):
+        resultados_bd = database.buscar_boletas(query_folio=query_folio.strip(), query_fecha=query_fecha)
+        if resultados_bd:
+            st.success(f"Se encontraron {len(resultados_bd)} coincidencias.")
+            
+            for b in resultados_bd:
+                with st.container():
+                    col_file, col_btn = st.columns([4, 1])
+                    with col_file:
+                        st.markdown(f"**Folio:** {b.folio} | **Guardado el:** {b.fecha_descarga.strftime('%Y-%m-%d %H:%M:%S')}")
+                        st.code(b.ruta_pdf)
+                    with col_btn:
+                        # Permitir descargar archivo almacenado validando si existe físicamente todavía
+                        if Path(b.ruta_pdf).exists():
+                            with open(b.ruta_pdf, "rb") as pdf_file:
+                                st.download_button("Descargar", data=pdf_file, file_name=f"{b.folio}.pdf", mime="application/pdf", key=f"btn_{b.id}")
+                        else:
+                            st.error("Ruta huérfana")
+                    st.divider()
         else:
-            base_temp = job_dir / "workers"
-            base_temp.mkdir(parents=True, exist_ok=True)
-            resultados = ejecutar(tareas, workers_n, t_carga, t_descarga, reintentos, base_temp, log_sidebar, kpi_slot, prog_slot, msg_slot, stat_slot)
-            st.session_state.resultados = resultados
-
-            ok = [r for r in resultados if r.ok]
-            err = [r for r in resultados if not r.ok]
-
-            if ok:
-                zip_bytes = hacer_zip(ok)
-                st.success(f"Proceso finalizado. PDFs descargados: {len(ok)}")
-                nombre_zip = construir_nombre_zip_desde_fechas(df, col_fecha) if modo_archivo else "boleta_individual.zip"
-                st.download_button("📦 Descargar ZIP con PDFs", data=zip_bytes, file_name=nombre_zip, mime="application/zip")
-
-            if err:
-                with st.expander(f"Ver errores ({len(err)})"):
-                    for r in err:
-                        st.error(f"{r.tarea.folio}: {r.mensaje}")
-    except WebDriverException as e:
-        st.error(f"Error de Selenium/ChromeDriver: {e}")
-    except Exception as e:
-        st.error(f"Ocurrió un error durante la ejecución: {e}")
-    finally:
-        if 'job_dir' in locals() and job_dir.exists() and not KEEP_JOB_DIR:
-            shutil.rmtree(job_dir, ignore_errors=True)
-
-st.markdown("</div>", unsafe_allow_html=True)
+            st.warning("No se encontraron resultados con ese criterio.")
