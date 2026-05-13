@@ -1,7 +1,8 @@
 version: "3.9"
 
 services:
-  boletas_app:
+
+  app:
     build: .
     container_name: boletas_app
     restart: always
@@ -9,8 +10,32 @@ services:
     ports:
       - "10000:10000"
 
+    environment:
+      DATABASE_URL: postgresql://boletas_user:123456@postgres:5432/boletas_db
+
+    depends_on:
+      - postgres
+
     volumes:
       - ./output:/tmp/boletas_app
 
+  postgres:
+    image: postgres:16
+
+    container_name: boletas_postgres
+
+    restart: always
+
     environment:
-      - TZ=America/Santiago
+      POSTGRES_USER: boletas_user
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: boletas_db
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
